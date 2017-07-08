@@ -1,3 +1,4 @@
+// Package contextutil implements some context utility functions.
 package contextutil
 
 import (
@@ -6,12 +7,12 @@ import (
 	"time"
 )
 
-// MultiContext creates a new context that is shares state from all the given
+// MultiContext creates a new context that shares state from all the given
 // contexts. Deadline() returns the smallest Deadline() among all of the given
 // contexts. Done() returns a channel that is closed when any of the given
-// context's Done channels are closed and Err() returns it associated Err().
-// Value() returns the first non-nil value from the given contexts, in order the
-// order given.
+// context's Done channels are closed and Err() returns its associated Err().
+// Value() returns the first non-nil value from the given contexts, in the order
+// given.
 //
 // Canceling this context releases resources associated with it, so code should
 // call the returned cancel function as soon as the operations running in this
@@ -32,32 +33,32 @@ type multiContext struct {
 	err  error
 }
 
-func (c *multiContext) cancel() {
-	c.once.Do(func() {
-		close(c.done)
-		if c.err == nil {
-			c.err = context.Canceled
+func (mc *multiContext) cancel() {
+	mc.once.Do(func() {
+		close(mc.done)
+		if mc.err == nil {
+			mc.err = context.Canceled
 		}
 	})
 }
 
-func (c *multiContext) selectCtxs() {
-	for _, ctx := range c.ctxs {
+func (mc *multiContext) selectCtxs() {
+	for _, ctx := range mc.ctxs {
 		go func(ctx context.Context) {
 			select {
 			case <-ctx.Done():
-				c.err = ctx.Err()
-				c.cancel()
-			case <-c.done:
+				mc.err = ctx.Err()
+				mc.cancel()
+			case <-mc.done:
 			}
 		}(ctx)
 	}
 }
 
-func (c *multiContext) Deadline() (deadline time.Time, ok bool) {
+func (mc *multiContext) Deadline() (deadline time.Time, ok bool) {
 	var found bool
 	min := time.Unix(1<<63-62135596801, 999999999)
-	for _, ctx := range c.ctxs {
+	for _, ctx := range mc.ctxs {
 		d, ok := ctx.Deadline()
 		if ok {
 			found = true
@@ -69,16 +70,16 @@ func (c *multiContext) Deadline() (deadline time.Time, ok bool) {
 	return min, found
 }
 
-func (c *multiContext) Done() <-chan struct{} {
-	return c.done
+func (mc *multiContext) Done() <-chan struct{} {
+	return mc.done
 }
 
-func (c *multiContext) Err() error {
-	return c.err
+func (mc *multiContext) Err() error {
+	return mc.err
 }
 
-func (c *multiContext) Value(key interface{}) interface{} {
-	for _, ctx := range c.ctxs {
+func (mc *multiContext) Value(key interface{}) interface{} {
+	for _, ctx := range mc.ctxs {
 		if v := ctx.Value(key); v != nil {
 			return v
 		}
